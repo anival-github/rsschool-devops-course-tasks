@@ -34,9 +34,8 @@ variable "bastion_instance_type" {
   default     = "t2.micro"
 }
 
-variable "bastion_key_name" {
-  description = "The name of the key pair to use for the bastion host. Please create this in the AWS console"
+variable "bastion_public_key" {
+  description = "The public key to use for the bastion host."
   type        = string
-  default     = "bastion-key"
 }
 
