@@ -15,7 +15,7 @@ resource "aws_security_group" "bastion" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = "0.0.0.0/0"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
@@ -23,7 +23,7 @@ resource "aws_security_group" "bastion" {
   }
 }
 
-resource "aws_Security_group" "private" {
+resource "aws_security_group" "private" {
   name        = "private-sg"
   description = "Security group for private instances"
   vpc_id      = aws_vpc.main.id
