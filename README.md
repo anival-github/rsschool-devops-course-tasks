@@ -17,13 +17,16 @@ This project contains Terraform code to deploy a basic networking infrastructure
   - **Security Groups**:
     - `bastion-sg`: Allows SSH access to the bastion from the internet.
     - `private-sg`: Allows SSH access from the bastion host to instances in the private subnets.
+  - **Network ACLs**:
+    - `public-nacl`: A network ACL for the public subnets.
+    - `private-nacl`: A network ACL for the private subnets.
 
 ## Usage
 
 1. **Prerequisites**:
    - Install [Terraform](https://learn.hashicorp.com/tutorials/terraform/install-cli).
    - Configure your AWS credentials.
-   - Create an EC2 Key Pair in the AWS console and update the `bastion_key_name` variable in `variables.tf`.
+   - Generate an SSH key pair. You will need to provide the public key to Terraform.
 
 2. **Initialize Terraform**:
    ```bash
