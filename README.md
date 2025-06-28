@@ -1,119 +1,134 @@
 # K3s Kubernetes Cluster on AWS
 
-This Terraform project sets up a K3s Kubernetes cluster on AWS. The cluster consists of one master node and one worker node, both running on Ubuntu 20.04 EC2 instances. A bastion host is also created to provide secure access to the cluster nodes.
+This Terraform project sets up a two-node K3s Kubernetes cluster on AWS. The cluster consists of one master node and one worker node running on Ubuntu EC2 instances. A bastion host is also created to provide secure access to the cluster nodes.
 
 ## Prerequisites
 
 - [Terraform](https://www.terraform.io/downloads.html) installed.
 - [AWS CLI](https://aws.amazon.com/cli/) configured with your credentials.
-- An SSH key pair. You will need to provide the public key for the bastion and the Kubernetes nodes.
+- An SSH key pair. If you only have one, you can use the same public key for both the bastion and the Kubernetes nodes.
 
 ## Setup
 
-1.  **Clone the repository**
-
-2.  **Navigate to the `terraform` directory**
+1.  **Navigate to the `terraform` directory**
     ```bash
     cd terraform
     ```
 
-3.  **Create a `terraform.tfvars` file**
-    Create a file named `terraform.tfvars` and add the following content:
+2.  **Create a `terraform.tfvars` file**
+    Copy the `terraform.tfvars.example` file to `terraform.tfvars` and fill in the values:
 
     ```hcl
-    bastion_public_key = "ssh-rsa ..."
-    k8s_public_key     = "ssh-rsa ..."
+    # Your SSH public key for the bastion host.
+    bastion_public_key = "ssh-rsa AAAA..."
+
+    # Your SSH public key for the Kubernetes nodes.
+    k8s_public_key     = "ssh-rsa AAAA..."
+
+    # Your public IP, used to allow API access for local kubectl.
+    # Find it by searching "what is my IP" in Google or running `curl ifconfig.me`.
     my_local_ip        = "x.x.x.x"
-    k3s_token          = "your-secret-token"
+
+    # A secret token for the k3s cluster. Choose any secure random string.
+    k3s_token          = "your-super-secret-token"
     ```
 
-    - `bastion_public_key`: Your SSH public key for the bastion host.
-    - `k8s_public_key`: Your SSH public key for the Kubernetes nodes.
-    - `my_local_ip`: Your public IP address. This is used to allow `kubectl` access from your local machine. You can find it by running `curl ifconfig.me`.
-    - `k3s_token`: A secret token for the k3s cluster. Choose a secure random string.
-
-4.  **Initialize Terraform**
+3.  **Initialize Terraform**
     ```bash
     terraform init
     ```
 
-5.  **Apply the Terraform configuration**
+4.  **Apply the Terraform configuration**
     ```bash
     terraform apply
     ```
-    This will provision the necessary AWS resources. Note the outputs, especially `bastion_public_ip` and `kubeconfig_command`.
+    Review the plan and type `yes` to create the resources.
 
-## Accessing the Cluster
+## Verifying the Cluster
 
-### From your local machine
+### Method 1: From the Bastion Host (Recommended First Step)
 
-1.  **Get the kubeconfig file**
-    Run the `kubeconfig_command` from the Terraform output. You will need to replace `<path_to_k8s_private_key>` with the path to your private SSH key that corresponds to the `k8s_public_key`.
-
+1.  **Get the required IP addresses** from the Terraform outputs:
     ```bash
-    eval "$(terraform output -raw kubeconfig_command)" > kubeconfig.yaml
+    terraform output bastion_public_ip
+    terraform output k8s_master_private_ip
     ```
 
-2.  **Update the kubeconfig**
-    The kubeconfig file will have the private IP of the master node. You need to replace it with the public IP of the bastion host and configure an SSH tunnel.
-
-    A better way is to set up port forwarding from your local machine to the master node via the bastion.
-
-    Open a new terminal and run:
-    ```bash
-    BASTION_IP=$(terraform output -raw bastion_public_ip)
-    MASTER_IP=$(terraform output -raw k8s_master_private_ip)
-    ssh -i <path_to_k8s_private_key> -L 6443:${MASTER_IP}:6443 ubuntu@${BASTION_IP} -N
+2.  **Add your private SSH key to your local SSH agent.** This is required for agent forwarding.
+    ```powershell
+    # On Windows PowerShell
+    ssh-add /path/to/your/private_key
     ```
-    This command will forward local port 6443 to the master's port 6443.
-
-3.  **Configure kubectl**
-    Now, get the `kubeconfig` again, but this time, save it and modify it.
     ```bash
-    terraform output -raw kubeconfig_command | sed "s/${MASTER_IP}/127.0.0.1/" > kubeconfig.yaml
+    # On Linux/macOS
+    ssh-add /path/to/your/private_key
     ```
 
-4.  **Use kubectl**
-    You can now use `kubectl` with this configuration file.
+3.  **SSH into the bastion host using agent forwarding (`-A`).** Note that the username is `ec2-user`.
     ```bash
-    export KUBECONFIG=./kubeconfig.yaml
+    ssh -A ec2-user@<bastion_public_ip>
+    ```
+
+4.  **From the bastion, SSH into the master node.** Your forwarded SSH agent will handle authentication automatically.
+    ```bash
+    ssh ubuntu@<k8s_master_private_ip>
+    ```
+
+5.  **On the master node, run this one-time setup** to configure `kubectl` for your user:
+    ```bash
+    mkdir -p $HOME/.kube
+    sudo cp /etc/rancher/k3s/k3s.yaml $HOME/.kube/config
+    sudo chown $(id -u):$(id -g) $HOME/.kube/config
+    ```
+
+6.  **Verify that both nodes are ready.** You should see two nodes listed.
+    ```bash
     kubectl get nodes
     ```
 
-### From the bastion host
+### Method 2: From Your Local Machine
 
-1.  **SSH into the bastion host**
+1.  **Get the required IP addresses** from the Terraform outputs:
     ```bash
-    ssh -i <path_to_bastion_private_key> ubuntu@<bastion_public_ip>
+    terraform output bastion_public_ip
+    terraform output k8s_master_private_ip
     ```
 
-2.  **SSH into the master node**
-    From the bastion, you can SSH into the master node using its private IP.
+2.  **In a separate terminal, start an SSH tunnel.** This command forwards your local port `16443` to the Kubernetes API server on the master node (port `6443`) via the bastion. Let this terminal run in the background.
     ```bash
-    ssh -i <path_to_k8s_private_key> ubuntu@<k8s_master_private_ip>
+    ssh -L 16443:$(terraform output -raw k8s_master_private_ip):6443 ec2-user@$(terraform output -raw bastion_public_ip) -N
     ```
 
-3.  **Use kubectl on the master node**
-    The `kubeconfig` is located at `/etc/rancher/k3s/k3s.yaml`.
+3.  **In another terminal, copy the kubeconfig file** from the master node to your local machine:
     ```bash
-    sudo kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml get nodes
+    scp -J ec2-user@$(terraform output -raw bastion_public_ip) ubuntu@$(terraform output -raw k8s_master_private_ip):/etc/rancher/k3s/k3s.yaml ~/.kube/config
+    ```
+
+4.  **Crucially, edit the `~/.kube/config` file on your local machine.** You need to change the server address to point to the local port you are forwarding.
+    *   **Find:** `server: https://127.0.0.1:6443`
+    *   **Replace with:** `server: https://localhost:16443`
+
+5.  **Verify you can access the cluster from your local machine:**
+    ```bash
+    kubectl get nodes
     ```
 
 ## Deploying a Workload
 
-Deploy a simple NGINX pod:
+Once `kubectl` is working, deploy a simple NGINX pod:
 ```bash
 kubectl apply -f https://k8s.io/examples/pods/simple-pod.yaml
 ```
 
-Verify the deployment:
+Verify the deployment. You should see `pod/nginx` in the `default` namespace.
 ```bash
-kubectl get pods --all-namespaces
+kubectl get all --all-namespaces
 ```
 
 ## Cleanup
 
-To destroy the resources created by Terraform, run:
+To destroy all resources created by this project, run:
 ```bash
 terraform destroy
 ```
+Type `yes` to confirm the destruction.
