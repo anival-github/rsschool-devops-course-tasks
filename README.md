@@ -21,6 +21,45 @@ This project contains Terraform code to deploy a basic networking infrastructure
     - `public-nacl`: A network ACL for the public subnets.
     - `private-nacl`: A network ACL for the private subnets.
 
+## Infrastructure Diagram
+
+```mermaid
+graph TD
+    User("User") -- "SSH" --> IGW("Internet Gateway")
+
+    subgraph "VPC"
+        direction TB
+
+        subgraph "Public Subnets (AZ1 & AZ2)"
+            direction LR
+            Bastion("Bastion Host")
+            NAT("NAT Gateway")
+        end
+
+        subgraph "Private Subnets (AZ1 & AZ2)"
+            direction LR
+            App1("Private Instance 1")
+            App2("Private Instance 2")
+        end
+
+        PublicRT("Public Route Table")
+        PrivateRT("Private Route Table")
+    end
+
+    IGW <--> PublicRT
+    PublicRT --> Bastion
+    PublicRT --> NAT
+
+    Bastion -- "SSH (via Security Group)" --> App1
+    Bastion -- "SSH (via Security Group)" --> App2
+
+    App1 -- "Outbound Traffic" --> PrivateRT
+    App2 -- "Outbound Traffic" --> PrivateRT
+    
+    PrivateRT -- "Route to 0.0.0.0/0" --> NAT
+    NAT -- "Outbound Traffic" --> PublicRT
+```
+
 ## Usage
 
 1. **Prerequisites**:
