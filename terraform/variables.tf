@@ -39,3 +39,31 @@ variable "bastion_public_key" {
   type        = string
 }
 
+variable "k8s_public_key" {
+  description = "The public key to use for the k8s instances."
+  type        = string
+}
+
+variable "my_local_ip" {
+  description = "Your local IP address to allow access to the k8s cluster."
+  type        = string
+}
+
+variable "k8s_master_instance_type" {
+  description = "The instance type for the k8s master node."
+  type        = string
+  default     = "t2.micro"
+}
+
+variable "k8s_worker_instance_type" {
+  description = "The instance type for the k8s worker node."
+  type        = string
+  default     = "t2.micro"
+}
+
+variable "k3s_token" {
+  description = "The token for k3s cluster."
+  type        = string
+  sensitive   = true
+}
+
