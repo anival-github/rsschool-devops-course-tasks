@@ -41,4 +41,4 @@ This project contains Terraform code to deploy a basic networking infrastructure
 4. **Apply**:
    ```bash
    terraform apply
-   ``` 
+   ```
